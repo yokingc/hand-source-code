@@ -28,10 +28,10 @@ function treeToList(tree){
     function dfs(children){
         for(const item of children){
             // 考虑到没设置children的情况，这样设置兜底值稳妥
-            const {children=[],...rest} = item
-            if(children.length>0) dfs(item.children)
+            const { children = [], ...rest } = item;
             // 不建议  delete item.children，会修改原树
             list.push(rest)
+            if (children.length > 0) dfs(item.children);
         }
     }
     dfs(tree)

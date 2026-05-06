@@ -6,16 +6,23 @@
 */
 
 function myNew(Constructor, ...args){
-    if(typeof Constructor !== 'function'){
-        throw new TypeError('not function')
-    }
-    // 创建新对象并链接到构造函数的原型对象上
-    const obj = Object.create(Constructor.prototype)
-    // 获取构造函数返回
-    const result = Constructor.apply(obj,args)
-    // 判断构造函数返回，如果是对象或者函数则采取，否则返回实例
-    if(result!==null && (typeof result === 'object' || typeof result === 'function')) return result
-    else return obj
+  if (typeof Constructor !== "function") {
+    throw new TypeError("not function");
+  }
+  // 创建新对象并链接到构造函数的原型对象上
+  // 等效于
+  // const obj = {}
+  // obj.__proto__ = Constructor.prototype
+  const obj = Object.create(Constructor.prototype);
+  // 获取构造函数返回
+  const result = Constructor.apply(obj, args);
+  // 判断构造函数返回，如果是对象或者函数则采取，否则返回实例
+  if (
+    result !== null &&
+    (typeof result === "object" || typeof result === "function")
+  )
+    return result;
+  else return obj;
 }
 
 /* 1. 为什么要 Object.create(Constructor.prototype)？
@@ -45,24 +52,27 @@ function myNew(Constructor, ...args){
 
 
 // instanceof 的本质是沿着左侧对象的原型链不断向上查找，如果能找到右侧构造函数的 prototype 就返回 true，否则返回 false。手写时我会先排除左侧的基本类型，再用 Object.getPrototypeOf 循环向上找。
-function myInstanceof(left, right) { 
-    // 理论上right应该是构造函数，应是具有prototype的对象，这里做简单判断，如果不是函数则抛错
-    if(typeof right !== 'function') {
-        throw new TypeError('right must be function')
-    }
-    // 如果左边是 null 或者不是对象或者函数，则返回false
-    if(left===null||( typeof left !== 'object' && typeof left !== 'function')){
-        return false
-    }
-    // 获取左边的原型
-    let proto = Object.getPrototypeOf(left)
-    while(proto){
-        if(proto === right.prototype) return true
-        // 沿着原型链向上查找直到null
-        proto = Object.getPrototypeOf(proto)
-    }
-    // 没找到，返回false
-    return false
+function myInstanceof(left, right) {
+  // 理论上right应该是构造函数，应是具有prototype的对象，这里做简单判断，如果不是函数则抛错
+  if (typeof right !== "function") {
+    throw new TypeError("right must be function");
+  }
+  // 如果左边是 null 或者不是对象或者函数，则返回false
+  if (
+    left === null ||
+    (typeof left !== "object" && typeof left !== "function")
+  ) {
+    return false;
+  }
+  // 获取左边的原型，等效于let proto = left.__proto__
+  let proto = Object.getPrototypeOf(left);
+  while (proto) {
+    if (proto === right.prototype) return true;
+    // 沿着原型链向上查找直到null
+    proto = Object.getPrototypeOf(proto);
+  }
+  // 没找到，返回false
+  return false;
 }
 
 /*
@@ -82,6 +92,23 @@ new Number(1) instanceof Number // true
 它更适合判断对象和构造函数之间的关系。
 基本类型用typeof或者Object.prototype.toString.call()
 */
+
+// 基本类型：typeof 对象：instanceof（找原型链）
+typeof 'abc' // 'string'
+typeof 123 // 'number'
+typeof undefined // 'undefined'
+typeof fn // 'function'
+
+//局限
+typeof null // 'object'
+typeof [] // 'object'
+typeof {} // 'object'
+
+//
+arr instanceof Array
+p instanceof Person
+d instanceof Date
+r instanceof RegExp
 
 // Object.create(proto)的作用是创建一个新对象，并将这个新对象的原型指向proto
 function myCreate(proto){

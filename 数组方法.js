@@ -19,7 +19,11 @@ function flatten(arr, depth= Infinity) {
 function flattenWithReduce(arr,depth= Infinity) {
    if(!Array.isArray(arr)) throw new TypeError('arguments must be an array')
    if(depth <= 0) return arr
-   return arr.reduce((acc, cur) => acc.concat(Array.isArray(cur) ? flattenWithReduce(cur) : cur), [])
+   return arr.reduce(
+     (acc, cur) =>
+       acc.concat(Array.isArray(cur) ? flattenWithReduce(cur, depth - 1) : cur),
+     [],
+   );
 }
 
 
@@ -60,61 +64,100 @@ function uniqueWithMap(arr,key) {
 // 数组的map filter reduce方法
 
 // ===== MAP =====
-// 重点：遍历数组，对每个元素执行回调，返回新数组
-// 加分点：保留原数组长度、处理稀疏数组、支持thisArg
-function map(arr, callback, thisArg) {
-    if (!Array.isArray(arr)) throw new TypeError('arguments must be an array')
-    const result = new Array(arr.length) // 重点：保留原数组长度
-    for (let i = 0; i < arr.length; i++) {
-        if (i in arr) { // 加分点：处理稀疏数组（跳过空位）
-            result[i] = callback.call(thisArg, arr[i], i, arr)
-        }
+// map的特点 1.返回一个新数组 2.新数组和原数组长度一致 3.不改变原数组 4.稀疏数组空位跳过
+Array.prototype.myMap = function (callback, thisArg) {
+  // 先对调用方及传入的回调函数做检查
+  if (this == null) {
+    throw new TypeError("Cannot read properties of null or undefined");
+  }
+
+  if (typeof callback !== "function") {
+    throw new TypeError(callback + " is not a function");
+  }
+  // 将一些类数组转化成可以安全使用length的
+  const arr = Object(this);
+  const len = arr.length;
+  const result = new Array(len);
+
+  for (let i = 0; i < len; i++) {
+    // 稀疏数组空洞处理，用索引赋值而不是空数组push，为了保留空洞
+    if (i in arr) {
+      result[i] = callback.call(thisArg, arr[i], i, arr);
     }
-    return result
-}
+  }
+
+  return result;
+};;;;;
+
 
 // ===== FILTER =====
-// 重点：遍历数组，保留满足条件的元素，返回新数组
-// 加分点：处理稀疏数组、支持thisArg
-function filter(arr, callback, thisArg) {
-    if (!Array.isArray(arr)) throw new TypeError('arguments must be an array')
-    const result = []
-    for (let i = 0; i < arr.length; i++) {
-        if (i in arr && callback.call(thisArg, arr[i], i, arr)) { // 加分点：处理稀疏数组
-            result.push(arr[i])
-        }
+// filter的特点 1.返回一个新数组 2.只保留回调函数为真值的元素 3.长度和原数组不一定一致
+Array.prototype.myFilter = function (callback, thisArg) {
+  if (this == null) {
+    throw new TypeError("Cannot read properties of null or undefined");
+  }
+
+  if (typeof callback !== "function") {
+    throw new TypeError(callback + " is not a function");
+  }
+
+  const arr = Object(this);
+  const len = arr.length;
+  const result = [];
+
+  for (let i = 0; i < len; i++) {
+    if (i in arr) {
+      if (callback.call(thisArg, arr[i], i, arr)) {
+        // 空数组push，不保留空洞
+        result.push(arr[i]);
+      }
     }
-    return result
-}
+  }
+
+  return result;
+};
 
 // ===== REDUCE =====
-// 重点：累积计算，将数组化为单个值
-// 加分点：处理初始值、处理空数组、支持稀疏数组
-function reduce(arr, callback, initialValue) {
-    if (!Array.isArray(arr)) throw new TypeError('arguments must be an array')
+// initialValue 有传和没传，处理不一样 没传时，第一次的累积值是数组里第一个有效元素 空数组且没传初始值，要报错
+// 接收两个参数，每轮循环的“加和”回调函数callback，以及初始值initialValue
+Array.prototype.myReduce = function (fn, initialValue) {
+  if (this == null) {
+    throw new TypeError("Cannot read properties of null or undefined");
+  }
 
-    let accumulator
-    let startIndex = 0
+  if (typeof callback !== "function") {
+    throw new TypeError(callback + " is not a function");
+  }
 
-    // 加分点：判断是否提供初始值
-    if (arguments.length >= 3) {
-        accumulator = initialValue
-    } else {
-        // 加分点：找到第一个非空位元素作为初始值
-        if (arr.length === 0) throw new TypeError('Reduce of empty array with no initial value')
-        for (let i = 0; i < arr.length; i++) {
-            if (i in arr) {
-                accumulator = arr[i]
-                startIndex = i + 1
-                break
-            }
-        }
+  let i = 0;
+  let acc;
+
+  // 空数组且没传初始值报错怎么写，arguments是函数内部自带的类数组对象，组装所有的实参
+  if (arguments.length >= 2) {
+    acc = initialValue;
+  } else {
+    // 去数组的第一个非空洞元素
+    while (i < this.length && !(i in this)) {
+      i++;
+    }
+    if (i >= this.length) {
+      throw new TypeError("Reduce of empty array with no initial value");
     }
 
-    for (let i = startIndex; i < arr.length; i++) {
-        if (i in arr) { // 加分点：处理稀疏数组
-            accumulator = callback(accumulator, arr[i], i, arr)
-        }
+    acc = this[i]; // 初始值为第一个有效元素，从第二个有效元素开始加和
+    i++;
+  }
+
+  if (acc === undefined) {
+    acc = this[0];
+    i = 1;
+  }
+
+  for (; i < this.length; i++) {
+    if (i in this) {
+      acc = fn(acc, this[i], i, this);
     }
-    return accumulator
-}
+  }
+
+  return acc;
+};
