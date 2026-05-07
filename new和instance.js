@@ -25,6 +25,9 @@ function myNew(Constructor, ...args){
   else return obj;
 }
 
+
+
+
 /* 1. 为什么要 Object.create(Constructor.prototype)？
 
 因为实例需要能访问构造函数原型上的方法。
@@ -92,6 +95,7 @@ new Number(1) instanceof Number // true
 它更适合判断对象和构造函数之间的关系。
 基本类型用typeof或者Object.prototype.toString.call()
 */
+
 
 // 基本类型：typeof 对象：instanceof（找原型链）
 typeof 'abc' // 'string'
