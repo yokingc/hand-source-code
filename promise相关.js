@@ -42,6 +42,7 @@ function myPromiseAll(promises) {
     })
   }
 
+
   // Promise.race 会返回一个新的 Promise。实现时我会遍历输入项，并用 Promise.resolve 统一包装；谁最先落定，不管是 fulfilled 还是 rejected，就直接用它来决定外层 Promise 的状态。它和 Promise.all 最大的区别是，all 等全部成功，而 race 只看第一个结束的结果。典型应用场景是请求超时控制。
   function myPromiseRace(promises){
     return new Promise((resolve,reject)=>{
@@ -65,37 +66,6 @@ function myPromiseAll(promises) {
 
 
 // Promise.allSettled 会等待所有输入项都落定，不管成功还是失败，最后统一返回结果数组。实现上我会遍历每一项，用 Promise.resolve 统一包装；成功时按索引存 { status: 'fulfilled', value }，失败时存 { status: 'rejected', reason }，然后无论成功失败都计数，等全部完成后统一 resolve(result)。它和 Promise.all 最大的区别是不会因为某一项失败而整体 reject。
-
-
-// any 全部失败才失败，一个成功则成功
-function promiseAny(promises) {
-  if (!Array.isArray(promises)) {
-    throw new TypeError('arguments must be an array')
-  }
-
-  return new Promise((resolve, reject) => {
-    if (promises.length === 0) {
-      return reject(new AggregateError([], 'All promises were rejected'))
-    }
-
-    let count = 0
-    const errors = []
-
-    promises.forEach((item, index) => {
-      Promise.resolve(item).then(
-        (value) => {
-          resolve(value)
-        }
-      ).catch((reason) => { 
-        errors[index] = reason
-        count++
-        if (count === promises.length) {
-          reject(new AggregateError(errors, 'All promises were rejected'))
-        }
-      })
-    })
-  })
-}
 
 // 适合场景：批量上传文件想知道每个文件的成败、多个接口、批量任务报表
 function myPromiseAllSettled(promises) { 
@@ -129,52 +99,81 @@ function myPromiseAllSettled(promises) {
   })
 }
 
-
-// 限并发调度的核心是控制同时执行中的任务数量不超过上限。我会维护一个待执行任务索引，先启动最多 limit 个任务；每当某个任务完成时，就再从队列里补一个任务进去。为了保证结果顺序正确，我会在任务启动前先保存当前索引，并把结果按这个索引写回数组。如果题目要求失败即终止，那就任一任务失败时直接 reject。
-// 限并发调度器，此处实现类似promise.all效果的，一个reject则整体停止
-function promiseLimit(tasks,limit){
-  return new Promise((resolve,reject)=>{ 
-    if(!Array.isArray(tasks)) {
-      return reject(new TypeError('arguments must be an array'))
-    }
-    if (typeof limit !== 'number' || limit <= 0) {
-      return reject(new TypeError('limit must be a positive number'));
-    }
-    const length = tasks.length
-    // 空数组
-    if(length === 0) return resolve([])
-    let count = 0
-    let result = []
-    let taskIndex = 0
-    function runTask(){
-      // 先确认一下index是否有效
-      if(taskIndex>=length) return
-      // 这三步必须在发起异步任务之前完成，否则拿到的不是对应的index
-      let curIndex = taskIndex
-      let curTask = tasks[taskIndex]
-      taskIndex++ 
-      // 此处默认tasks都是返回的Promise，用Promise.resolve.then(()=>curTask()).then 更兼容普通值和同步报错
-      Promise.resolve().then(()=>curTask()).then((value)=>{
-        result[curIndex] = value
-        count++
-        if(count === length){
-          resolve(result)
-        } else{
-          runTask() // 谁先完成谁补位
-        }
-      }).catch(reject)
+// any 全部失败才失败，一个成功则成功 最大特点如果数组空要报错
+function promiseAny(promises) {
+  return new Promise((resolve, reject) => {
+    if (!Array.isArray(promises)) {
+      throw new TypeError("arguments must be an array");
     }
 
-    // 先启动并行上限
-    const realLimit = Math.min(limit,length)
-    for(let i=0;i<realLimit;i++){
-      runTask()
+    if (promises.length === 0) {
+      return reject(new AggregateError([], "All promises were rejected"));
     }
-})
+
+    let count = 0;
+    const errors = [];
+
+    promises.forEach((item, index) => {
+      Promise.resolve(item)
+        .then((value) => {
+          resolve(value);
+        })
+        .catch((reason) => {
+          errors[index] = reason;
+          count++;
+          if (count === promises.length) {
+            reject(new AggregateError(errors, "All promises were rejected"));
+          }
+        });
+    });
+  });
 }
 
-// Promise.resolve包装方式区别，前者监听的是Promise比如race中，后者监听的是普通函数比如限并发调度器
-// Promise.resolve(item).then 和 Promise.resolve().then(()=>item()).then
+
+// 限并发调度的核心是控制同时执行中的任务数量不超过上限。我会维护一个待执行任务索引，先启动最多 limit 个任务；每当某个任务完成时，就再从队列里补一个任务进去。为了保证结果顺序正确，我会在任务启动前先保存当前索引，并把结果按这个索引写回数组。如果题目要求失败即终止，那就任一任务失败时直接 reject。
+// 限并发调度器，实现类似promise.all效果的，一个reject则整体停止
+function promiseLimit(tasks, limit) {
+  return new Promise((resolve, reject) => {
+    const results = new Array(tasks.length); // 按原顺序保存结果
+    let nextIndex = 0; // 下一个要启动的任务下标
+    let finished = 0; // 已完成数量
+    let running = 0; // 当前并发中的数量
+
+    function runNext() {
+      // 全部完成
+      if (finished === tasks.length) {
+        resolve(results);
+        return;
+      }
+
+      // 尽量补满并发池
+      while (running < limit && nextIndex < tasks.length) {
+        const currentIndex = nextIndex;
+        const task = tasks[currentIndex];
+        nextIndex++;
+        running++;
+
+        Promise.resolve()
+          .then(() => task())
+          .then((res) => {
+            results[currentIndex] = res;
+          })
+          .catch((err) => {
+            reject(err); // 一个失败就整体失败，和 Promise.all 类似
+          })
+          .finally(() => {
+            running--;
+            finished++;
+            runNext(); // 有坑位了，继续补任务
+          });
+      }
+    }
+
+    runNext();
+  });
+}
+
+// Promise.resolve包装方式区别，前者监听的是Promise比如race、all中，后者监听的是普通函数比如限并发调度器
 
 
 // 小异步sleep：返回一个一段时间后才resolve的Promise 和定时器的区别：基于定时器封装的Promise，更适合在async await线性执行，把异步流程写成了同步结构
@@ -184,7 +183,7 @@ function sleep(delay=0){
   })
 }
 
-// 使用：先创建一个Promis，然后创建一个定时器，在指定延迟后resolve，再执行then的代码
+// 使用：先创建一个Promise，然后创建一个定时器，在指定延迟后resolve，再执行then的代码
 sleep(1000).then(() => {
   console.log('done')
 })
